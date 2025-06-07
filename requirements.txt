@@ -1,0 +1,4 @@
+requests
+telethon
+python-dotenv
+argparse
