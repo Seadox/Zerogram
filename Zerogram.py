@@ -68,6 +68,17 @@ class Zerogram:
                 f"messages/{self.bot_username}", f"bot_{token}_chat_{chat_id}.txt")
 
             if not os.path.exists(filename):
+                bot_info = self.get_bot_info(self.bot_token)
+                chat_type = bot_info.get('chat_type', '')
+                chat_member_count = bot_info.get('chat_member_count', 0)
+                invite_link = bot_info.get('invite_link', None)
+                name = bot_info.get('name', '')
+                username = bot_info.get('username', '')
+                admin_id = bot_info.get('admin_id', None)
+                admin_name = bot_info.get('admin_name', '')
+                admin_username = bot_info.get('admin_username', '')
+                language_code = bot_info.get('language_code', '')
+
                 try:
                     with open(filename, "w", encoding="utf-8") as f:
                         f.write("┌──────────────────────────────┐\n")
@@ -78,6 +89,22 @@ class Zerogram:
                         f.write(f"│ Chat ID          : {chat_id}\n")
                         f.write(
                             f"│ Last Message ID  : {self.last_message_id}\n")
+
+                        if name or username:
+                            full_name = f"{name} (@{username})".strip(
+                            )
+                            f.write(f"│ Chat With        : {full_name}\n")
+                        if chat_type:
+                            f.write(f"│ Chat Type        : {chat_type}\n")
+                            f.write(f"│ Admin ID         : {admin_id}\n")
+                            f.write(
+                                f"│ Admin Name       : {admin_name} (@{admin_username})\n")
+                            f.write(f"│ Admin Language   : {language_code}\n")
+                        if chat_member_count:
+                            f.write(
+                                f"│ Members in Chat  : {chat_member_count}\n")
+                        if invite_link:
+                            f.write(f"│ Invite Link      : {invite_link}\n")
                         f.write("└──────────────────────────────┘\n\n")
                 except Exception as e:
                     print(f"[-] Error creating file header: {e}")
@@ -117,38 +144,74 @@ class Zerogram:
             raw_token = raw_token[3:]
         return raw_token
 
-    def get_bot_info(self, bot_token: str) -> tuple:
-        """
-        :return: (bot_id, first_name, username, chat_member_count)
-        """
+    def get_bot_info(self, bot_token: str) -> dict:
+        info = {}
         bot_id = None
-        first_name = None
-        username = None
-        chat_member_count = 0
+
         try:
             r = requests.get(f"{TELEGRAM_API_URL}{bot_token}/getMe")
             data = r.json()
             if data.get("ok"):
-                res = data["result"]
-                bot_id = res.get("id")
-                first_name = res.get("first_name")
-                username = res.get("username")
+                response = data["result"]
+
+                bot_id = response.get("id")
+
+                info['bot_id'] = bot_id
+                info['bot_name'] = response.get("first_name")
+                info['bot_username'] = response.get("username")
             else:
                 print(f"[getMe] Error: {data}")
 
             r = requests.get(
-                f"{TELEGRAM_API_URL}{bot_token}/getChatMemberCount", params={"chat_id": bot_id})
+                f"{TELEGRAM_API_URL}{bot_token}/getChatMemberCount", params={"chat_id": self.chatid_entry})
             count_data = r.json()
             if count_data.get("ok"):
-                chat_member_count = count_data.get("result", 0)
+                info['chat_member_count'] = count_data.get("result", 0)
             else:
                 print(
                     f"[getChatMemberCount] Error getting chat member count: {count_data}")
 
+            r = requests.get(
+                f"{TELEGRAM_API_URL}{bot_token}/getChat", params={"chat_id": self.chatid_entry})
+            chat_data = r.json()
+
+            if chat_data.get("ok"):
+                chat_info = chat_data.get("result", {})
+                if chat_info:
+                    chat_type = chat_info.get("type", "")
+                    info['chat_type'] = chat_type
+
+                    if chat_type in ["group", "supergroup", "channel"]:
+                        info['invite_link'] = chat_info.get("invite_link", "")
+                    elif chat_type == "private":
+                        info['name'] = f"{user.get('first_name', '')} {user.get('last_name', '')}".strip(
+                        )
+                        info['username'] = chat_info.get("username", "")
+
+            if info['chat_type'] in ["group", "supergroup", "channel"]:
+                r = requests.get(
+                    f"{TELEGRAM_API_URL}{bot_token}/getChatAdministrators", params={"chat_id": self.chatid_entry})
+                admin_data = r.json()
+                if admin_data.get("ok"):
+                    results = admin_data.get("result", [])
+                    if results:
+                        admin_data = results[-1]
+                        user = admin_data["user"]
+                        if user:
+                            info['admin_id'] = user.get("id")
+                            info['admin_name'] = f"{user.get('first_name', '')} {user.get('last_name', '')}".strip(
+                            )
+                            info['admin_username'] = user.get("username", "")
+                            info['language_code'] = user.get(
+                                "language_code", "")
+                else:
+                    print(
+                        f"[getChatAdministrators] Error getting chat administrators: {admin_data}")
+
         except Exception as e:
             print(f"[getMe] Request error: {e}")
 
-        return bot_id, first_name, username, chat_member_count
+        return info
 
     async def telethon_send_start(self, bot_username: str) -> None:
         try:
@@ -177,7 +240,7 @@ class Zerogram:
                         user = forward_origin.get("sender_user")
                         sender_name = user.get("first_name")
                         if user.get("last_name"):
-                            sender_name += " " + user.get("last_name")
+                            sender_name += f" {user.get('last_name')}"
                         self.users.add(sender_name)
                     elif forward_origin.get("type") == "hidden_user":
                         sender_name = forward_origin.get("sender_user_name")
@@ -352,10 +415,17 @@ class Zerogram:
             return False
 
         parsed_token = self.parse_bot_token(raw_token)
-        bot_id, first_name, bot_user, chat_member_count = self.get_bot_info(
-            parsed_token)
+        bot_info = self.get_bot_info(parsed_token)
 
-        if not bot_id or not first_name or not bot_user or not chat_member_count:
+        bot_id = bot_info.get('bot_id')
+        bot_name = bot_info.get('bot_name')
+        bot_user = bot_info.get('bot_username')
+        chat_member_count = bot_info.get('chat_member_count', 0)
+        invite_link = bot_info.get('invite_link', None)
+        name = bot_info.get('name', '')
+        username = bot_info.get('username', '')
+
+        if not bot_id or not bot_name or not bot_user or not chat_member_count:
             print("[!] get_bot_info failed or not a valid bot token!")
             return False
 
@@ -369,14 +439,19 @@ class Zerogram:
             return False
 
         self.last_message_id = last_message_id
-        info_msg = f"""
-        ╔══════════ BOT STATUS ══════════╗
-        ║ Bot Username     : @{bot_user}
-        ║ Attacker Chat ID : {self.chatid_entry}
-        ║ Chat Member Count: {chat_member_count}
-        ║ Last Message ID  : {last_message_id}
-        ╚════════════════════════════════╝
-        """
+        invite_line = f"║ Invite Link      : {invite_link}\n" if invite_link is not None else ""
+        chat_with_line = f"║ Chat With        : {name} (@{username})\n" if name or username else ""
+
+        info_msg = (
+            f"╔══════════ BOT STATUS ══════════╗\n"
+            f"║ Bot Username     : @{bot_user}\n"
+            f"║ Attacker Chat ID : {self.chatid_entry}\n"
+            f"║ Chat Member Count: {chat_member_count}\n"
+            f"{invite_line}"
+            f"{chat_with_line}"
+            f"║ Last Message ID  : {last_message_id}\n"
+            f"╚════════════════════════════════╝"
+        )
 
         print(info_msg)
         return True
@@ -758,5 +833,3 @@ if __name__ == "__main__":
             "Delete the messages after forwarding? (y/n): ").strip().lower() == 'y'
 
         bot.start(delete_messages=delete_messages)
-
-# 🇮🇱
