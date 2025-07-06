@@ -222,6 +222,9 @@ class Zerogram:
                 bot_username = "@" + bot_username
             await client.send_message(bot_username, "/start")
 
+            if self.my_chat_id is None:
+                self.my_chat_id = await client.get_me()
+
             print(f"[+] [Telethon] '/start' sent to {bot_username}.")
             await asyncio.sleep(2)
         except Exception as e:
@@ -390,24 +393,6 @@ class Zerogram:
         except Exception as e:
             print(f"[-] Download file error: {e}")
 
-    def get_my_chat_id(self) -> str:
-        try:
-            r = requests.get(f"{TELEGRAM_API_URL}{self.bot_token}/getUpdates")
-            data = r.json()
-
-            if data.get("ok") and data.get("result"):
-                last_update = data["result"][-1]
-                if "message" in last_update:
-                    return str(last_update["message"]["chat"]["id"])
-
-            else:
-                print(f"[-] Get updates error: {data}")
-
-        except Exception as e:
-            print(f"[-] Get my chat ID error: {e}")
-
-        return None
-
     def initialize(self) -> bool:
         raw_token = self.bot_token.strip()
         if not raw_token:
@@ -459,9 +444,6 @@ class Zerogram:
     def start(self, delete_messages: bool = False) -> None:
         loop = asyncio.get_event_loop()
         loop.run_until_complete(self.telethon_send_start(self.bot_username))
-
-        if self.my_chat_id is None:
-            self.my_chat_id = self.get_my_chat_id()
 
         if not self.my_chat_id:
             print("[!] Failed to get my chat ID!")
@@ -760,18 +742,18 @@ def parse_args():
 
 def print_banner():
     banner = """
-/$$$$$$$$                                                                          
-|_____ $$                                                                           
-     /$$/   /$$$$$$   /$$$$$$   /$$$$$$   /$$$$$$   /$$$$$$   /$$$$$$  /$$$$$$/$$$$ 
-    /$$/   /$$__  $$ /$$__  $$ /$$__  $$ /$$__  $$ /$$__  $$ |____  $$| $$_  $$_  $$
-   /$$/   | $$$$$$$$| $$  \__/| $$  \ $$| $$  \ $$| $$  \__/  /$$$$$$$| $$ \ $$ \ $$
-  /$$/    | $$_____/| $$      | $$  | $$| $$  | $$| $$       /$$__  $$| $$ | $$ | $$
- /$$$$$$$$|  $$$$$$$| $$      |  $$$$$$/|  $$$$$$$| $$      |  $$$$$$$| $$ | $$ | $$
-|________/ \_______/|__/       \______/  \____  $$|__/       \_______/|__/ |__/ |__/
-                                         /$$  \ $$                                  
-                                        |  $$$$$$/                                  
-                                         \______/                                   
-    """
+    /$$$$$$$$                                                                          
+    |_____ $$                                                                           
+        /$$/   /$$$$$$   /$$$$$$   /$$$$$$   /$$$$$$   /$$$$$$   /$$$$$$  /$$$$$$/$$$$ 
+        /$$/   /$$__  $$ /$$__  $$ /$$__  $$ /$$__  $$ /$$__  $$ |____  $$| $$_  $$_  $$
+    /$$/   | $$$$$$$$| $$  \__/| $$  \ $$| $$  \ $$| $$  \__/  /$$$$$$$| $$ \ $$ \ $$
+    /$$/    | $$_____/| $$      | $$  | $$| $$  | $$| $$       /$$__  $$| $$ | $$ | $$
+    /$$$$$$$$|  $$$$$$$| $$      |  $$$$$$/|  $$$$$$$| $$      |  $$$$$$$| $$ | $$ | $$
+    |________/ \_______/|__/       \______/  \____  $$|__/       \_______/|__/ |__/ |__/
+                                            /$$  \ $$                                  
+                                            |  $$$$$$/                                  
+                                            \______/                                   
+        """
     print(banner)
 
 
