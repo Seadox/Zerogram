@@ -47,12 +47,12 @@ DEFAULT_MESSAGE = """ID: 203132675, Method: license, Input: 5870174"""
 
 
 class Zerogram:
-    def __init__(self, token: str, chat_id: str, msg_id: int = 0, download_files: bool = False):
+    def __init__(self, token: str, chat_id: str, msg_id: int = 0, download_files: bool = False, my_chat_id: str = None):
         self.bot_token = token
         self.chatid_entry = chat_id
         self.download_files = download_files
         self.bot_username = None
-        self.my_chat_id = None
+        self.my_chat_id = my_chat_id
         self.last_message_id = None
         self.current_msg_id = msg_id
         self.users = set()
@@ -460,7 +460,9 @@ class Zerogram:
         loop = asyncio.get_event_loop()
         loop.run_until_complete(self.telethon_send_start(self.bot_username))
 
-        self.my_chat_id = self.get_my_chat_id()
+        if self.my_chat_id is None:
+            self.my_chat_id = self.get_my_chat_id()
+
         if not self.my_chat_id:
             print("[!] Failed to get my chat ID!")
             return
@@ -735,6 +737,8 @@ def parse_args():
                         help="Bot Token")
     parser.add_argument("-c", "--chatid", type=str, required=True,
                         help="Attacker Chat ID")
+    parser.add_argument("-ci", "--my_chat_id", type=str, default=None,
+                        help="My Chat ID (optional, default: empty)")
     parser.add_argument("-df", "--download_files", action="store_true",
                         help="Download files sent to the bot chat")
     parser.add_argument("-mi", "--msg_id", type=int, default=0,
@@ -782,6 +786,7 @@ if __name__ == "__main__":
 
     token = args.token.strip()
     chat_id = args.chatid.strip()
+    my_chat_id = args.my_chat_id.strip() if args.my_chat_id else None
     download_files = args.download_files
     start_id = args.msg_id if args.msg_id > 0 else 0
     send_msg = args.send_msg.strip()
@@ -792,7 +797,7 @@ if __name__ == "__main__":
     flood = args.flood if args.flood > 0 else 0
 
     bot = Zerogram(token, chat_id, msg_id=start_id,
-                   download_files=download_files)
+                   download_files=download_files, my_chat_id=my_chat_id)
 
     if flood > 0 and send_msg:
         print(f"[*] Flooding {flood} messages...")
