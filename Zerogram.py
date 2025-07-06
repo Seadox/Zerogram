@@ -94,7 +94,7 @@ class Zerogram:
                             full_name = f"{name} (@{username})".strip(
                             )
                             f.write(f"│ Chat With        : {full_name}\n")
-                        if chat_type:
+                        if chat_type and chat_type != "private":
                             f.write(f"│ Chat Type        : {chat_type}\n")
                             f.write(f"│ Admin ID         : {admin_id}\n")
                             f.write(
