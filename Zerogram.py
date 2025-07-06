@@ -43,7 +43,7 @@ client = TelegramClient("anon_session", api_id,
 
 TELEGRAM_API_URL = "https://api.telegram.org/bot"
 TELEGRAM_API_FILE_URL = "https://api.telegram.org/file/bot"
-DEFAULT_MESSAGE = """ID: 203132675, Method: license, Input: 5870174"""
+DEFAULT_MESSAGE = """."""
 
 
 class Zerogram:
