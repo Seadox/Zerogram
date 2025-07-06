@@ -67,6 +67,7 @@ On the first run, Telegram will send you a login code that you need to enter int
 
 | Flag                    | Description                                          | Example                     |
 | ----------------------- | ---------------------------------------------------- | --------------------------- |
+| `-ci, --my_chat_id`     | My Chat ID                                           | `-ci "1969833298"`          |
 | `-df, --download_files` | Download files sent to the bot chat (if implemented) | `-df`                       |
 | `-mi, --msg_id`         | Starting message ID for forwarding or deletion       | `-mi 10`                    |
 | `-sm, --send_msg`       | Send a text message to the chat                      | `-sm "Hello from Zerogram"` |
@@ -81,7 +82,7 @@ On the first run, Telegram will send you a login code that you need to enter int
 ### Forward all messages
 
 ```bash
-python zerogram.py -t 123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11 -c 987654321
+python zerogram.py -t "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11" -c "987654321"
 ```
 
 ### Send a message
