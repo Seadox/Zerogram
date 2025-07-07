@@ -218,6 +218,13 @@ class Zerogram:
             await client.start(phone_number)
             print("[+] [Telethon] Logged in with your account.")
 
+            dialogs = await client.get_dialogs()
+
+            if dialogs and bot_username in [d.name for d in dialogs]:
+                print(
+                    f"[+] [Telethon] Bot {bot_username} already exists in dialogs.")
+                return
+
             if not bot_username.startswith("@"):
                 bot_username = "@" + bot_username
             await client.send_message(bot_username, "/start")
