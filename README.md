@@ -24,7 +24,6 @@ Any use of this tool for unlawful purposes or unauthorized access is strictly pr
 - Change the bot's display name
 - Send various types of files (photos, videos, audio, documents, animations, voice messages)
 - Logout and leave chats
-- Flood chat with messages
 - Command-line interface for flexible usage
 
 ## Requirements
@@ -75,7 +74,6 @@ On the first run, Telegram will send you a login code that you need to enter int
 | `-sn, --set_name`       | Set a new name for the bot                           | `-sn "NewBotName"`          |
 | `-f, --file`            | Send a file to the chat                              | `-f ./path/to/file.jpg`     |
 | `-l, --logout`          | Leave the chat and logout the bot                    | `-l`                        |
-| `-fl, --flood`          | Flood messages                                       | `-fl 20 -sm "Spam message"` |
 
 ## Examples
 
@@ -107,12 +105,6 @@ python zerogram.py -t <bot_token> -c <chat_id> -sn "MyCoolBot"
 
 ```bash
 python zerogram.py -t <bot_token> -c <chat_id> -f "./images/photo.jpg"
-```
-
-### Flood 10 messages with the text "Spam"
-
-```bash
-python zerogram.py -t <bot_token> -c <chat_id> -fl 10 -sm "Spam"
 ```
 
 ## License
