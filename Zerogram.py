@@ -222,11 +222,6 @@ class Zerogram:
                 me = await client.get_me()
                 self.my_chat_id = me.id
 
-            if await client.get_entity(bot_username.replace("@", "")):
-                print(
-                    f"[+] [Telethon] Bot {bot_username} already exists in dialogs.")
-                return
-
             if not bot_username.startswith("@"):
                 bot_username = "@" + bot_username
             await client.send_message(bot_username, "/start")
