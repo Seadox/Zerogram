@@ -3,6 +3,7 @@ import asyncio
 import os
 import threading
 import time
+from datetime import datetime
 from telethon import TelegramClient
 from dotenv import load_dotenv
 import argparse
@@ -114,7 +115,13 @@ class Zerogram:
                 with open(filename, "a", encoding="utf-8") as f:
                     f.write(
                         f"\n--- Message ID: {message['message_id']} ---\n")
-                    f.write(f"Date: {message['date']}\n")
+                    # Convert Unix timestamp to DD/MM/YYYY HH:MM format
+                    if message['date']:
+                        formatted_date = datetime.fromtimestamp(
+                            message['date']).strftime("%d/%m/%Y %H:%M")
+                        f.write(f"Date: {formatted_date}\n")
+                    else:
+                        f.write(f"Date: Unknown\n")
                     if message['sender_name'] and message['sender_name'] != "Unknown":
                         f.write(f"Sender: {message['sender_name']}\n")
                     if message['text']:
@@ -238,26 +245,82 @@ class Zerogram:
 
                 forward_origin = message.get("forward_origin")
                 sender_name = None
+                original_date = None
 
                 if forward_origin:
-                    if forward_origin.get("type") == "user":
-                        user = forward_origin.get("sender_user")
-                        sender_name = user.get("first_name")
-                        if user.get("last_name"):
-                            sender_name += f" {user.get('last_name')}"
+                    original_date = forward_origin.get(
+                        "date")  # Get the original forward date
+                    if forward_origin.get("type") == "user" and forward_origin.get("sender_user"):
+                        user_details = {
+                            "username": forward_origin.get("sender_user", {}).get("username"),
+                            "firstName": forward_origin.get("sender_user", {}).get("first_name"),
+                            "lastName": forward_origin.get("sender_user", {}).get("last_name"),
+                            "userId": forward_origin.get("sender_user", {}).get("id"),
+                            "isBot": forward_origin.get("sender_user", {}).get("is_bot", False),
+                            "forwardDate": forward_origin.get("date"),
+                            "originType": "user",
+                        }
+                        sender_name = ""
+                        if user_details["firstName"]:
+                            sender_name += user_details["firstName"]
+                        if user_details["lastName"]:
+                            sender_name += f" {user_details['lastName']}"
+                        if user_details["username"]:
+                            sender_name += f" @{user_details['username']}"
                         self.users.add(sender_name)
                     elif forward_origin.get("type") == "hidden_user":
-                        sender_name = forward_origin.get("sender_user_name")
+                        user_details = {
+                            "username": None,
+                            "firstName": forward_origin.get("sender_user_name"),
+                            "lastName": None,
+                            "userId": None,
+                            "isBot": False,
+                            "forwardDate": forward_origin.get("date"),
+                            "originType": "hidden_user",
+                        }
+                        sender_name = ""
+                        if user_details["firstName"]:
+                            sender_name += user_details["firstName"]
+                        if user_details["username"]:
+                            sender_name += f" @{user_details['username']}"
                         self.users.add(sender_name)
-                    elif forward_origin.get("type") == "chat":
-                        sender_name = forward_origin.get("sender_chat")
-                    elif forward_origin.get("type") == "channel":
-                        sender_name = forward_origin.get("chat").get("title")
+                    elif forward_origin.get("type") == "chat" and forward_origin.get("sender_chat"):
+                        user_details = {
+                            "username": forward_origin.get("sender_chat", {}).get("username"),
+                            "firstName": forward_origin.get("sender_chat", {}).get("title"),
+                            "lastName": None,
+                            "userId": forward_origin.get("sender_chat", {}).get("id"),
+                            "chatType": forward_origin.get("sender_chat", {}).get("type"),
+                            "isBot": False,
+                            "forwardDate": forward_origin.get("date"),
+                            "originType": "chat",
+                        }
+                        sender_name = ""
+                        if user_details["firstName"]:
+                            sender_name += user_details["firstName"]
+                        if user_details["username"]:
+                            sender_name += f" @{user_details['username']}"
+                    elif forward_origin.get("type") == "channel" and forward_origin.get("chat"):
+                        user_details = {
+                            "username": forward_origin.get("chat", {}).get("username"),
+                            "firstName": forward_origin.get("chat", {}).get("title"),
+                            "lastName": None,
+                            "userId": forward_origin.get("chat", {}).get("id"),
+                            "chatType": forward_origin.get("chat", {}).get("type"),
+                            "isBot": False,
+                            "forwardDate": forward_origin.get("date"),
+                            "originType": "channel",
+                        }
+                        sender_name = ""
+                        if user_details["firstName"]:
+                            sender_name += user_details["firstName"]
+                        if user_details["username"]:
+                            sender_name += f" @{user_details['username']}"
 
                 content = {
                     "message_id": message_id,
                     "chat_id": chat_id,
-                    "date": message.get("date"),
+                    "date": original_date if original_date else message.get("date"),
                     "text": message.get("text", ""),
                     "sender_name": sender_name if sender_name else "Unknown",
                     "caption": message.get("caption", ""),
@@ -474,8 +537,9 @@ class Zerogram:
         txt = f"Forwarded from ID {start_id}..{max_id}, total success: {success_count}, total users: {len(self.users)}"
 
         print("[Result] " + txt.replace("\n", " | "))
+        print("[Users] " + ", ".join(self.users))
 
-    def send_message(self, chat_id: str, message: str = DEFAULT_MESSAGE) -> int:
+    def send_message(self, chat_id: str, message: str = DEFAULT_MESSAGE) -> int | bool:
         payload = {
             "chat_id": chat_id,
             "text": message
@@ -492,8 +556,14 @@ class Zerogram:
             if data.get("ok"):
                 print(f"[+] Message sent to {chat_id}.")
                 return data.get("result", {}).get("message_id", None)
+            elif data.get("error_code") == 403 or data.get("error_code") == 401:
+                print(
+                    f"[!] Bot was blocked or cannot send message to {chat_id}.")
+                return False
             else:
                 print(f"[-] Send message error: {data}")
+                self.fail_msg_handler(data)
+                return True
 
         except Exception as e:
             print(f"[-] Send message error: {e}")
@@ -650,7 +720,7 @@ class Zerogram:
         except Exception as e:
             print(f"[-] Leave chat error: {e}")
 
-    def copy_message(self, from_chat_id: str, to_chat_id: str, message_id: int) -> None:
+    def copy_message(self, from_chat_id: str, to_chat_id: str, message_id: int) -> int | bool:
         payload = {
             "from_chat_id": from_chat_id,
             "chat_id": to_chat_id,
@@ -667,9 +737,15 @@ class Zerogram:
 
             if data.get("ok"):
                 print(f"[+] Copied message ID {message_id}.")
+                return data.get("result", {}).get("message_id", None)
+            elif data.get("error_code") == 403 or data.get("error_code") == 401:
+                print(
+                    f"[!] Bot was blocked or cannot send message to {chat_id}.")
+                return False
             else:
                 print(f"[!] Copy message fail ID: {message_id}")
                 self.fail_msg_handler(data)
+                return True
 
         except Exception as e:
             print(f"[-] Copy message error: {e}")
@@ -687,8 +763,10 @@ class Zerogram:
                         break
                     count -= 1
 
-                self.copy_message(self.chatid_entry,
-                                  self.chatid_entry, message_id)
+                copy = self.copy_message(self.chatid_entry,
+                                         self.chatid_entry, message_id)
+                if not copy:
+                    break
 
         def forward_loop(message_id):
             nonlocal count
@@ -697,9 +775,9 @@ class Zerogram:
                     if count <= 0:
                         break
                     count -= 1
-
-                self.forward_msg(self.bot_token, self.chatid_entry,
-                                 self.chatid_entry, message_id, save_content=False)
+                send = self.send_message(self.chatid_entry, message)
+                if not send:
+                    break
 
         th1 = threading.Thread(
             target=copy_loop, args=(message_id,), daemon=True)
